@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/logoliceo" href="images/icono logo liceo.png">
+    <script>
+        const loggedInUser = localStorage.getItem('currentUser');
+        if (loggedInUser) {
+            document.getElementById('welcomeMessage').textContent = `Bienvenido, ${loggedInUser}!`;
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'index.html';
+        }
+
+        const currentUser = localStorage.getItem('currentUser');
+        if (!currentUser) {
+            window.location.href = 'index.html';
+        }
+    </script>
+    </head>
+
+
+     <nav class="navbar">
+        <div class="navbar-logo">
+            <img src="https://tse1.mm.bing.net/th/id/OIP.DHYOs8h8AejlZb84VZ5YhwHaHa?cb=thfvnext&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Logo">
+        </div>
+        <div class="navbar-title">
+            Sistema de Logística
+        </div>
+        <div class="dropdown">
+            <button class="dropdown-toggle">Menú ☰</button>
+            <div class="dropdown-menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="equipos.html">Equipos</a>
+                <a href="#reportes">Reportes</a>
+                <a href="#" onclick="logout()">Cerrar Sesión</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <h1 id="welcomeMessage"></h1>
+        <p>Aquí va el contenido de tu panel de control, como estadísticas e información general.</p>
+    </div>
+
+<body>
+        <h1>Bienvenido al Sistema de Logística</h1>
+        <p>¡Has iniciado sesión correctamente!</p>
+
+</body>
+</html>

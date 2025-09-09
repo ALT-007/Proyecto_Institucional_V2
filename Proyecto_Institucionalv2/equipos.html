@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Equipos</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- ❌ REMOVIDO: <link rel="stylesheet" href="guardar_equipo.php"> -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    
+    <script>
+        const currentUser = localStorage.getItem('currentUser');
+        if (!currentUser) {
+            window.location.href = 'index.html';
+        }
+    </script>
+    
+    <nav class="navbar">
+        <div class="navbar-logo">
+            <img src="https://tse1.mm.bing.net/th/id/OIP.DHYOs8h8AejlZb84VZ5YhwHaHa?cb=thfvnext&rs=1&pid=ImgDetMain&o=7&rm=3" alt="Logo">
+        </div>
+        <div class="navbar-title">
+            Sistema de Logística
+        </div>
+        <div class="dropdown">
+            <button class="dropdown-toggle">Menú ☰</button>
+            <div class="dropdown-menu">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="equipos.php">Equipos</a>
+                <a href="#reportes">Reportes</a>
+                <a href="#" onclick="logout()">Cerrar Sesión</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="equipos-container">
+        <h1>Gestión de Equipos</h1>
+
+        <div class="action-bar">
+            <button class="btn btn-primary" onclick="showModal('equipoModal')">
+                <i class="fas fa-plus-circle"></i> Agregar Equipo
+            </button>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Código FIERRE</th>
+                        <th>Nombre</th>
+                        <th>Categoría</th>
+                        <th>Estado</th>
+                        <th>Ubicación</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="equiposTableBody">
+                    <!-- Los equipos se cargarán aquí dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Loading indicator -->
+        <div id="loadingIndicator" style="display: none; text-align: center; padding: 20px;">
+            <i class="fas fa-spinner fa-spin"></i> Cargando...
+        </div>
+    </div>
+    
+    <!-- Modal para agregar/editar equipos -->
+    <div id="equipoModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('equipoModal')">&times;</span>
+            <h2 id="modalTitle">Agregar Equipo</h2>
+            <form id="equipoForm">
+                <label for="equipoCodigo">Código FIERRE:</label>
+                <input type="text" id="equipoCodigo" name="codigo" readonly>
+
+                <label for="equipoNombre">Nombre:</label>
+                <input type="text" id="equipoNombre" name="nombre" required>
+
+                <label for="equipoCategoria">Categoría:</label>
+                <input type="text" id="equipoCategoria" name="categoria" required>
+
+                <label for="equipoEstado">Estado:</label>
+                <select id="equipoEstado" name="estado" required>
+                    <option value="">Seleccionar estado</option>
+                    <option value="disponible">Disponible</option>
+                    <option value="asignado">Asignado</option>
+                    <option value="mantenimiento">Mantenimiento</option>
+                </select>
+
+                <label for="equipoUbicacion">Ubicación:</label>
+                <input type="text" id="equipoUbicacion" name="ubicacion" required>
+
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-save"></i> Guardar Equipo
+                </button>
+            </form>
+        </div>
+    </div>
+
+<script>
+    // Variables globales
+    let editandoId = null;
+    let isSubmitting = false;
+
+    // Inicialización cuando el DOM está listo
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM cargado, iniciando aplicación...');
+        loadEquipos();
+        initializeEventListeners();
+    });
+
+    // Configurar event listeners
+    function initializeEventListeners() {
+        // Event listener para el formulario
+        document.getElementById('equipoForm').addEventListener('submit', handleFormSubmit);
+        
+        // Event listener para cerrar modal con ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('equipoModal').style.display === 'block') {
+                closeModal('equipoModal');
+            }
+        });
+    }
+
+    // Obtener equipos del servidor
+    async function fetchEquipos() {
+        try {
+            showLoading(true);
+            const response = await fetch('obtener_equipos.php', {
+                method: 'GET',
+                cache: 'no-cache'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const equipos = await response.json();
+            console.log('Equipos obtenidos:', equipos);
+            return equipos;
+            
+        } catch (error) {
+            console.error('Error al obtener equipos:', error);
+            showNotification('Error al cargar los equipos', 'error');
+            return [];
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // Cargar y mostrar equipos en la tabla
+    async function loadEquipos() {
+        console.log('Cargando equipos...');
+        const equipos = await fetchEquipos();
+        const tbody = document.getElementById('equiposTableBody');
+        tbody.innerHTML = '';
+        
+        if (equipos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No hay equipos registrados</td></tr>';
+            return;
+        }
+        
+        equipos.forEach(equipo => {
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td>${escapeHtml(equipo.codigo)}</td>
+                <td>${escapeHtml(equipo.nombre)}</td>
+                <td>${escapeHtml(equipo.categoria)}</td>
+                <td><span class="status-badge status-${equipo.estado}">${escapeHtml(equipo.estado)}</span></td>
+                <td>${escapeHtml(equipo.ubicacion)}</td>
+                <td>
+                    <button class="btn btn-action" onclick="editarEquipo(${equipo.id})" title="Editar">
+                        <img src="images/edit.png" alt="Editar" style="width:16px; height:16px;">
+                    </button>
+                    <button class="btn btn-action btn-danger" onclick="eliminarEquipo(${equipo.id})" title="Eliminar">
+                        <img src="images/delete.png" alt="Eliminar" style="width:16px; height:16px;">
+                    </button>
+                </td>
+            `;
+        });
+        
+        console.log(`${equipos.length} equipos cargados en la tabla`);
+    }
+
+    // Manejar envío del formulario
+    async function handleFormSubmit(e) {
+        e.preventDefault();
+        
+        // Prevenir múltiples envíos
+        if (isSubmitting) {
+            console.log('Ya se está procesando una solicitud...');
+            return;
+        }
+        
+        // Validar formulario
+        if (!validateForm()) {
+            return;
+        }
+        
+        isSubmitting = true;
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        submitBtn.disabled = true;
+        
+        try {
+            const equipoData = {
+                nombre: document.getElementById('equipoNombre').value.trim(),
+                categoria: document.getElementById('equipoCategoria').value.trim(),
+                estado: document.getElementById('equipoEstado').value,
+                ubicacion: document.getElementById('equipoUbicacion').value.trim(),
+            };
+
+            // Si estamos editando, incluir ID y código
+            if (editandoId !== null) {
+                equipoData.id = editandoId;
+                equipoData.codigo = document.getElementById('equipoCodigo').value;
+            }
+
+            console.log('Enviando datos:', equipoData);
+
+            const response = await fetch('guardar_equipo.php', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                },
+                body: JSON.stringify(equipoData),
+            });
+
+            const result = await response.json();
+            
+            if (response.ok) {
+                showNotification(result.message, 'success');
+                closeModal('equipoModal');
+                await loadEquipos(); // Recargar la tabla
+            } else {
+                throw new Error(result.message || 'Error del servidor');
+            }
+
+        } catch (error) {
+            console.error('Error al guardar:', error);
+            showNotification('Error al guardar el equipo: ' + error.message, 'error');
+        } finally {
+            isSubmitting = false;
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    }
+
+    // Validar formulario
+    function validateForm() {
+        const nombre = document.getElementById('equipoNombre').value.trim();
+        const categoria = document.getElementById('equipoCategoria').value.trim();
+        const estado = document.getElementById('equipoEstado').value;
+        const ubicacion = document.getElementById('equipoUbicacion').value.trim();
+
+        if (!nombre) {
+            showNotification('El nombre es obligatorio', 'error');
+            document.getElementById('equipoNombre').focus();
+            return false;
+        }
+
+        if (!categoria) {
+            showNotification('La categoría es obligatoria', 'error');
+            document.getElementById('equipoCategoria').focus();
+            return false;
+        }
+
+        if (!estado) {
+            showNotification('El estado es obligatorio', 'error');
+            document.getElementById('equipoEstado').focus();
+            return false;
+        }
+
+        if (!ubicacion) {
+            showNotification('La ubicación es obligatoria', 'error');
+            document.getElementById('equipoUbicacion').focus();
+            return false;
+        }
+
+        return true;
+    }
+
+    // Mostrar/ocultar modal
+    function showModal(modalId) {
+        document.getElementById(modalId).style.display = 'block';
+        // Enfocar el primer campo del formulario
+        setTimeout(() => {
+            document.getElementById('equipoNombre').focus();
+        }, 100);
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+        document.getElementById('equipoForm').reset();
+        document.getElementById('modalTitle').textContent = 'Agregar Equipo';
+        editandoId = null;
+        document.getElementById('equipoCodigo').value = '';
+    }
+
+    // Editar equipo
+    async function editarEquipo(id) {
+        console.log('Editando equipo ID:', id);
+        
+        try {
+            // Buscar el equipo en la tabla actual
+            const fila = document.querySelector(`[onclick="editarEquipo(${id})"]`).closest('tr');
+            if (!fila) {
+                throw new Error('No se pudo encontrar la fila del equipo');
+            }
+
+            // Llenar el formulario con los datos actuales
+            document.getElementById('equipoCodigo').value = fila.cells[0].innerText;
+            document.getElementById('equipoNombre').value = fila.cells[1].innerText;
+            document.getElementById('equipoCategoria').value = fila.cells[2].innerText;
+            
+            // Para el estado, necesitamos extraer el texto sin los estilos
+            const estadoBadge = fila.cells[3].querySelector('.status-badge');
+            const estadoText = estadoBadge ? estadoBadge.innerText.toLowerCase() : '';
+            document.getElementById('equipoEstado').value = estadoText;
+            
+            document.getElementById('equipoUbicacion').value = fila.cells[4].innerText;
+            
+            // Configurar el modal para edición
+            document.getElementById('modalTitle').textContent = 'Editar Equipo';
+            editandoId = id;
+            showModal('equipoModal');
+            
+        } catch (error) {
+            console.error('Error al cargar datos para editar:', error);
+            showNotification('Error al cargar los datos del equipo', 'error');
+        }
+    }
+
+    // Eliminar equipo
+    async function eliminarEquipo(id) {
+        if (!confirm('¿Estás seguro de que quieres eliminar este equipo?\nEsta acción no se puede deshacer.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('eliminar_equipo.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id }),
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                showNotification(data.message, 'success');
+                await loadEquipos(); // Recargar la tabla
+            } else {
+                throw new Error(data.message || 'Error del servidor');
+            }
+            
+        } catch (error) {
+            console.error('Error al eliminar:', error);
+            showNotification('Error al eliminar el equipo: ' + error.message, 'error');
+        }
+    }
+
+    // Cerrar sesión
+    function logout() {
+        if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        }
+    }
+
+    // Utilidades
+    function showLoading(show) {
+        const loading = document.getElementById('loadingIndicator');
+        loading.style.display = show ? 'block' : 'none';
+    }
+
+    function showNotification(message, type = 'info') {
+        // Crear elemento de notificación si no existe
+        let notification = document.getElementById('notification');
+        if (!notification) {
+            notification = document.createElement('div');
+            notification.id = 'notification';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 5px;
+                color: white;
+                font-weight: bold;
+                z-index: 10000;
+                max-width: 300px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            `;
+            document.body.appendChild(notification);
+        }
+
+        // Configurar el estilo según el tipo
+        const colors = {
+            success: '#4CAF50',
+            error: '#f44336',
+            info: '#2196F3',
+            warning: '#ff9800'
+        };
+
+        notification.style.backgroundColor = colors[type] || colors.info;
+        notification.textContent = message;
+        notification.style.display = 'block';
+
+        // Auto-ocultar después de 5 segundos
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 5000);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+
+<style>
+    /* Estilos adicionales para mejorar la UX */
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .btn-danger {
+        background-color: #dc3545;
+    }
+    
+    .btn-danger:hover {
+        background-color: #c82333;
+    }
+    
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+    
+    .modal-content {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 90%;
+        max-width: 500px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .close-btn {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .close-btn:hover {
+        color: black;
+    }
+    
+    .fa-spinner {
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+
+</body>
+</html>
